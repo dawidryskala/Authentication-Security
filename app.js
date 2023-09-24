@@ -7,8 +7,11 @@ import { basename, dirname } from "path";
 import { fileURLToPath } from "url";
 import ejs from "ejs";
 import mongoose from "mongoose";
-import encrypt from "mongoose-encryption";
+// import encrypt from "mongoose-encryption";
+// import md5 from "md5";
+import bcrypt from "bcrypt";
 
+const saltRounds = 10;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -27,8 +30,7 @@ const userSchema = new mongoose.Schema({
     password: String,
 });
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
-
+// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
 
 const User = mongoose.model("User", userSchema);
 
@@ -45,16 +47,22 @@ app.get("/register", function (req, res) {
 });
 
 app.post("/register", function (req, res) {
-    const newUser = new User({
-        email: req.body.username,
-        password: req.body.password,
-    })
 
-    newUser.save().then(function () {
-        res.render("secrets")
-    }).catch(function (err) {
-        console.log(err);
+    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+
+        const newUser = new User({
+            email: req.body.username,
+            password: hash,
+        })
+
+        newUser.save().then(function () {
+            res.render("secrets")
+        }).catch(function (err) {
+            console.log(err);
+        });
+
     });
+
 });
 
 app.post("/login", function (req, res) {
@@ -65,9 +73,16 @@ app.post("/login", function (req, res) {
 
         if (foundUser) {
             console.log("Usere was found")
-            if (foundUser.password === password) {
-                res.render("secrets");
-            }
+
+            bcrypt.compare(password, foundUser.password, function (err, result) {
+                // result == true
+                if (result === true) {
+                    res.render("secrets");
+                } else {
+                    res.render("login");
+                }
+            });
+
         } else if (!foundUser) {
             res.render("login");
         }
